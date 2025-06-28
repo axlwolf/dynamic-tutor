@@ -1,9 +1,9 @@
 import { GoogleGenAI } from '@google/genai';
 
-// Crear instancia global que se puede reinicializar
+// Variable global para la instancia
 let ai: GoogleGenAI | null = null;
 
-// Función para inicializar con API key
+// Función para inicializar dinámicamente
 export function initializeGemini(apiKey: string) {
   try {
     ai = new GoogleGenAI({ apiKey });
@@ -14,9 +14,9 @@ export function initializeGemini(apiKey: string) {
   }
 }
 
-// Función para obtener la instancia (para uso interno)
-function getAI(): GoogleGenAI | null {
-  // Si no está inicializada, intentar con variable de entorno
+// Función para obtener la instancia AI
+function getAI() {
+  // Si no está inicializada, usar variable de entorno
   if (!ai && import.meta.env.VITE_GEMINI_API_KEY) {
     ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
   }
@@ -64,7 +64,6 @@ Eres un experto en educación. Explica el concepto o tema "${topic}" de forma ed
 No agregues texto fuera del JSON.`;
 
   try {
-    // Obtener instancia de AI
     const aiInstance = getAI();
     
     if (!aiInstance) {

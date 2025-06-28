@@ -1,15 +1,13 @@
-
-
 import React, { useState, useEffect } from "react";
 import { useTranslation } from 'react-i18next';
 import { NavigationMenu, NavigationMenuList, NavigationMenuItem } from "@/components/ui/navigation-menu";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { getGeminiEducationalContent, GeminiEducationalResponse } from "@/lib/gemini";
+import { getGeminiEducationalContent, type GeminiEducationalResponse, initializeGemini } from "@/lib/gemini";
+import { ApiKeySetup } from "@/components/ApiKeySetup";
 import { Stepper } from "./components/ui/stepper";
 import { Accordion as UiAccordion } from "@/components/ui/accordion";
-import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Loader2, Languages } from "lucide-react";
 import {
@@ -19,12 +17,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-/**
- * Componente principal de la aplicación Dynamic Tutor.
- * Permite al usuario buscar un tema, obtener contenido educativo generado por Gemini API,
- * y visualizarlo en diferentes formatos (explicación, pasos, ejemplos, glosario, quiz).
- * Incluye funcionalidades de cambio de tema (claro/oscuro) e internacionalización (inglés/español).
- */
 function App() {
   const { t, i18n } = useTranslation();
   const [topic, setTopic] = useState("");
@@ -33,12 +25,26 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [debugRaw, setDebugRaw] = useState<string | null>(null);
   const [showRaw, setShowRaw] = useState(false);
+  const [isApiKeySet, setIsApiKeySet] = useState(false);
+
+  // Verificar si ya hay una API key guardada al cargar
+  useEffect(() => {
+    const savedApiKey = localStorage.getItem('gemini_api_key');
+    if (savedApiKey) {
+      const success = initializeGemini(savedApiKey);
+      if (success) {
+        setIsApiKeySet(true);
+      } else {
+        // Si falla, eliminar la key guardada
+        localStorage.removeItem('gemini_api_key');
+      }
+    }
+  }, []);
 
   const changeLanguage = (lng: string) => {
     i18n.changeLanguage(lng);
   };
 
-  // Traducir mensajes de error que vienen de gemini.ts
   const translateGeminiError = (errorMessage: string | null): string | null => {
     if (!errorMessage) return null;
     if (errorMessage.startsWith("La respuesta de Gemini no cumple con el esquema esperado:")) {
@@ -48,12 +54,16 @@ function App() {
       return t('invalidResponseError');
     }
     if (errorMessage.startsWith("Error al parsear JSON o contactar la API:")) {
-        return t('apiJsonParseError', {details: errorMessage.substring("Error al parsear JSON o contactar la API:".length).trim() });
+      return t('apiJsonParseError', {details: errorMessage.substring("Error al parsear JSON o contactar la API:".length).trim() });
     }
-    // Si no es un error conocido de gemini.ts, devolver el mensaje original o uno genérico
+    if (errorMessage === "Gemini no está inicializado. Por favor, configura tu API key.") {
+      return "Gemini no está inicializado. Por favor, configura tu API key.";
+    }
+    if (errorMessage.startsWith("Error al parsear JSON:")) {
+      return errorMessage; // Mantener el mensaje original del parsing
+    }
     return errorMessage || t('defaultError');
   };
-
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,26 +82,69 @@ function App() {
       }
 
       if (response.error) {
-        setError(response.error); // Store original error first
+        setError(response.error);
       } else if (response.data) {
         setResult(response.data);
       } else {
-        setError(t("unexpectedResponse"));
+        setError("Respuesta inesperada de Gemini");
       }
     } catch (err: any) {
-      setError(err.message || t("defaultError"));
+      setError(err.message || "Error desconocido");
       console.error("Error en handleSubmit:", err);
     } finally {
       setLoading(false);
     }
   };
 
-  // Efecto para traducir el error cuando cambie el idioma o el error mismo
   const [translatedError, setTranslatedError] = useState<string | null>(null);
   useEffect(() => {
     setTranslatedError(translateGeminiError(error));
   }, [error, i18n.language, t]);
 
+  const handleApiKeySet = () => {
+    setIsApiKeySet(true);
+  };
+
+  // Si no está configurada la API key, mostrar el setup
+  if (!isApiKeySet) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <nav className="w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-30">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 flex h-16 items-center justify-between">
+            <NavigationMenu className="flex-1">
+              <NavigationMenuList className="flex items-center gap-2">
+                <NavigationMenuItem>
+                  <span className="font-bold text-lg tracking-tight select-none">{t('navbarTitle')}</span>
+                </NavigationMenuItem>
+              </NavigationMenuList>
+            </NavigationMenu>
+            <div className="flex items-center gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon">
+                    <Languages className="h-[1.2rem] w-[1.2rem]" />
+                    <span className="sr-only">Change language</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => changeLanguage('en')} disabled={i18n.language === 'en'}>
+                    English
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => changeLanguage('es')} disabled={i18n.language === 'es'}>
+                    Español
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <ThemeToggle />
+            </div>
+          </div>
+        </nav>
+        <main className="flex-1 flex items-center justify-center py-12">
+          <ApiKeySetup onApiKeySet={handleApiKeySet} />
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -105,6 +158,16 @@ function App() {
             </NavigationMenuList>
           </NavigationMenu>
           <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => {
+                localStorage.removeItem('gemini_api_key');
+                setIsApiKeySet(false);
+              }}
+            >
+              Cambiar API Key
+            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="icon">
@@ -139,7 +202,7 @@ function App() {
               onChange={e => setTopic(e.target.value)}
               placeholder={t('searchPlaceholder')}
               className="w-full px-4 py-3 rounded-lg border border-input focus:outline-none focus:ring-2 focus:ring-primary transition text-lg placeholder-muted-foreground bg-background text-foreground"
-              aria-label={t('searchPlaceholder')} // Mantenemos por si acaso, pero el label es mejor
+              aria-label={t('searchPlaceholder')}
               disabled={loading}
             />
             <Button type="submit" className="w-full mt-2 py-3 text-lg" disabled={loading || !topic.trim()}>
@@ -211,7 +274,7 @@ function App() {
                   </div>
                 )}
 
-                {result.glosario && result.glosario.length > 0 && (
+                {result && result.glosario && result.glosario.length > 0 && (
                   <div>
                     <h2 className="text-2xl font-semibold mb-3 text-primary">{t('glossaryHeader')}</h2>
                     <GlossaryAccordion items={result.glosario} />
@@ -233,12 +296,7 @@ function App() {
   );
 }
 
-/**
- * Componente para renderizar un quiz interactivo de opción múltiple.
- *
- * @param quiz Objeto que contiene la pregunta, opciones y respuesta correcta del quiz.
- * @returns Un elemento Card con el quiz.
- */
+// Resto de los componentes (QuizComponent y GlossaryAccordion) permanecen igual...
 function QuizComponent({ quiz }: { quiz: GeminiEducationalResponse["quiz"] }) {
   const { t } = useTranslation();
   const [selected, setSelected] = React.useState<string | null>(null);
@@ -278,7 +336,7 @@ function QuizComponent({ quiz }: { quiz: GeminiEducationalResponse["quiz"] }) {
         <div
           className={`mt-4 text-sm font-semibold transition-all duration-300 ease-in-out
                          ${isCorrect ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
-          role="status" // Para que los lectores de pantalla anuncien el cambio
+          role="status"
         >
           {isCorrect ? t('correctQuizResult') : t('incorrectQuizResult', { answer: quiz.respuesta })}
         </div>
@@ -287,39 +345,23 @@ function QuizComponent({ quiz }: { quiz: GeminiEducationalResponse["quiz"] }) {
   );
 }
 
-/**
- * Componente para renderizar un glosario interactivo usando un acordeón.
- * Cada término y su definición se muestran en un panel colapsable.
- *
- * @param items Un array de objetos, donde cada objeto tiene `termino` y `definicion`.
- * @returns Un componente UiAccordion con los ítems del glosario.
- */
 function GlossaryAccordion({ items }: { items: { termino: string; definicion: string }[] }) {
-  const [open, setOpen] = React.useState<string | null>(null);
-
   if (!items || items.length === 0) return null;
+
+  const accordionItems = items.map(item => ({
+    title: item.termino,
+    content: item.definicion,
+  }));
 
   return (
     <UiAccordion
       type="single"
       collapsible
       className="w-full space-y-2"
-      value={open || undefined}
-      onValueChange={setOpen}
+      items={accordionItems}
     >
-      {items.map((g, i) => (
-        <UiAccordion.Item value={g.termino} key={g.termino + i} className="border border-border rounded-md bg-muted/30">
-          <UiAccordion.Trigger className="w-full px-4 py-3 text-left focus:outline-none">
-             <Badge variant={open === g.termino ? "default" : "secondary"} className="text-sm">{g.termino}</Badge>
-          </UiAccordion.Trigger>
-          <UiAccordion.Content className="px-4 pb-3 pt-1 text-foreground/80 text-sm">
-            {g.definicion}
-          </UiAccordion.Content>
-        </UiAccordion.Item>
-      ))}
     </UiAccordion>
   );
 }
 
 export default App;
-

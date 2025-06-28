@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json", // Extiende la configuración principal
+  "compilerOptions": {
+    "module": "CommonJS", // Jest funciona mejor con CommonJS
+    "jsx": "react-jsx",   // Asegurar que JSX esté configurado
+    "esModuleInterop": true, // Para mejor compatibilidad con módulos CJS/ESM
+    "skipLibCheck": true,
+    "noUnusedLocals": false, // A veces útil para pruebas
+    "noUnusedParameters": false, // A veces útil para pruebas
+    // Asegurarse que 'types' incluya 'jest' y 'node' para el entorno de prueba
+    "types": ["jest", "node"]
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "jest.config.cjs",
+    "src/setupTests.ts"
+  ]
+  // No es necesario "exclude" node_modules aquí, tsconfig.json base ya lo hace
+}
